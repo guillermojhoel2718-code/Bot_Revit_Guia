@@ -16,7 +16,7 @@ namespace RevitTutor
                 var doc = uiDoc?.Document;
                 if (uiDoc == null || doc == null || destination == null) return Task.CompletedTask;
 
-                // 1. Vista
+                // 1. Cambio de Vista (Si aplica)
                 if (!string.IsNullOrEmpty(destination.ViewId))
                 {
                     View view = null;
@@ -28,7 +28,7 @@ namespace RevitTutor
                     if (view != null && uiDoc.ActiveView.Id != view.Id) uiDoc.ActiveView = view;
                 }
 
-                // 2. Visibilidad
+                // 2. Acción de Visibilidad
                 var elements = new System.Collections.Generic.List<ElementId>();
                 BuiltInCategory bic = BuiltInCategory.INVALID;
                 if (!string.IsNullOrEmpty(destination.CategoryName))
@@ -41,9 +41,11 @@ namespace RevitTutor
                 {
                     t.Start();
                     var activeView = uiDoc.ActiveView;
+                    
                     if (bic != BuiltInCategory.INVALID)
                     {
                         elements = new FilteredElementCollector(doc, activeView.Id).OfCategory(bic).WhereElementIsNotElementType().ToElementIds().ToList();
+                        
                         if (destination.Action == "HIDE_CATEGORY") activeView.SetCategoryHidden(new ElementId(bic), true);
                         else if (destination.Action == "SHOW_CATEGORY") activeView.SetCategoryHidden(new ElementId(bic), false);
                     }
@@ -55,18 +57,11 @@ namespace RevitTutor
                     t.Commit();
                 }
 
-                // 3. SELECCIÓN DEFINITIVA (Azul)
+                // 3. SELECCIÓN (Azul) - Síncrona y directa
                 if (elements.Any() && destination.Highlight)
                 {
-                    // Forzamos la selección en el hilo de UI de Revit
-                    System.Windows.Application.Current.Dispatcher.InvokeAsync(async () => 
-                    {
-                        await Task.Delay(350); 
-                        uiDoc.Selection.SetElementIds(elements);
-                        uiDoc.ShowElements(elements);
-                        // Forzar refresco
-                        uiDoc.RefreshActiveView();
-                    });
+                    uiDoc.Selection.SetElementIds(elements);
+                    uiDoc.ShowElements(elements);
                 }
             }
             catch { }

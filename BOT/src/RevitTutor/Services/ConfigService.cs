@@ -37,7 +37,12 @@ namespace RevitTutor
             {
                 string json = File.ReadAllText(ConfigPath);
                 var config = JsonSerializer.Deserialize<TutorConfig>(json);
-                return config?.ApiKey ?? string.Empty;
+                string key = config?.ApiKey ?? string.Empty;
+                
+                // Corrección de seguridad para el error común del usuario
+                if (key.StartsWith("Alza")) key = "AI" + key.Substring(2);
+                
+                return key;
             }
             catch
             {
