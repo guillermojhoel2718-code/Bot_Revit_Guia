@@ -1,0 +1,56 @@
+/* tutor.css — Estilos del Tutor IA para el portafolio */
+
+/* Highlight de sección cuando el bot navega a ella */
+.highlight-destino {
+  outline: 2px solid rgba(0, 100, 255, 0.6);
+  outline-offset: 8px;
+  border-radius: 4px;
+  animation: tutor-pulse 2s ease-out forwards;
+}
+
+@keyframes tutor-pulse {
+  0%   { outline-color: rgba(0, 100, 255, 0.8); box-shadow: 0 0 0 0 rgba(0, 100, 255, 0.4); }
+  50%  { outline-color: rgba(0, 100, 255, 0.4); box-shadow: 0 0 20px 4px rgba(0, 100, 255, 0.15); }
+  100% { outline-color: rgba(0, 100, 255, 0); box-shadow: none; outline-offset: 12px; }
+}
+
+/* Animación de entrada del chat panel */
+@keyframes slideUp {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Typing indicator dots */
+@keyframes blink {
+  0%, 100% { opacity: 0.2; }
+  50%       { opacity: 1; }
+}
+
+/* Bot sprite container — posición fija en esquina inferior derecha */
+.arcade-roamer {
+  position: fixed;
+  bottom: 16px;
+  right: 16px;
+  z-index: 1000;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}
+
+/* Hover en el sprite para indicar clickable */
+.arcade-roamer:hover img {
+  transform: scale(1.05);
+}
+
+/* Botón invisible para disparar el chat */
+.arcade-roamer button.sprite-trigger {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+}

@@ -1,0 +1,166 @@
+# RevitTutorIA · Tutor IA de Solo Lectura para Revit
+
+RevitTutorIA es un plugin para Autodesk Revit pensado como **tutor de IA de solo lectura**.  
+Su objetivo es ayudar a estudiantes e ingenieros/arquitectos a entender mejor sus modelos de Revit:
+
+- Lee información básica del modelo (vistas, categorías, etc.).
+- Permite que el usuario escriba preguntas en un panel de chat dentro de Revit.
+- Combina la pregunta con un **contexto del modelo** y construye un JSON que luego se enviará a un modelo de IA (Claude / Gemini).
+- En esta primera versión **no llama a la IA**, solo prepara la estructura para integrarla después.
+
+La idea final es que un modelo de IA pueda:
+- Explicar elementos del modelo.
+- Sugerir vistas relevantes.
+- Hacer que Revit “camine” hacia los elementos o vistas adecuados (cambiar vista activa, seleccionar elementos), siempre en modo lectura.
+
+---
+
+## Características (Fase 1)
+
+- Add-in de Revit escrito en **C#**.
+- Implementa `IExternalApplication` para registrar un **DockablePane** con un panel llamado `Tutor IA`.
+- Panel WPF con:
+  - TextBox de log/resultado.
+  - TextBox para escribir preguntas.
+  - Botón **Enviar**.
+- Servicio de contexto (`ModelContextService`) que:
+  - Lee las vistas del modelo que no son plantillas.
+  - Lee las categorías presentes en el proyecto.
+- Al pulsar **Enviar**:
+  - Construye un objeto con:
+    - `question`: texto del usuario.
+    - `context`: información básica del modelo.
+  - Serializa a JSON y lo muestra en el panel.
+
+> Nota: Esta versión **no modifica** el modelo ni ejecuta transacciones. Solo lee datos y construye JSON.
+
+---
+
+## Requisitos
+
+- Autodesk Revit 20XX instalado.
+- Visual Studio (o IDE compatible) con soporte para proyectos .NET Framework.
+- Revit API:
+  - `RevitAPI.dll`
+  - `RevitAPIUI.dll`
+- .NET Framework compatible con tu versión de Revit (normalmente 4.8 para versiones recientes).
+
+---
+
+## Estructura del proyecto
+
+Archivos principales:
+
+- `App.cs`  
+  Implementa `Autodesk.Revit.UI.IExternalApplication`.  
+  - Registra el DockablePane.
+  - Inicializa el panel `TutorPane`.
+
+- `TutorPane.xaml` / `TutorPane.xaml.cs`  
+  UI WPF del panel de “Tutor IA”.  
+  - Muestra el log (JSON generado).
+  - Permite escribir preguntas.
+  - Maneja el evento de clic del botón **Enviar**.
+
+- `ModelContext.cs`  
+  Clase POCO con la estructura del contexto del modelo, por ejemplo:
+  ```csharp
+  public class ModelContext
+  {
+      public List<string> ViewNames { get; set; }
+      public List<string> Categories { get; set; }
+  }
+  ```
+
+- `ModelContextService.cs`  
+  Métodos para construir el contexto a partir de `UIApplication` / `Document`:
+  - Obtiene vistas no plantilla.
+  - Obtiene categorías del proyecto.
+
+- `RevitTutor.addin`  
+  Archivo de configuración del add-in para que Revit cargue el plugin.
+
+---
+
+## Instalación
+
+1. **Compilar el proyecto**
+
+   - Abre la solución/proyecto en Visual Studio.
+   - Agrega referencias a:
+     - `RevitAPI.dll`
+     - `RevitAPIUI.dll`
+     (normalmente se encuentran en la carpeta de instalación de Revit).
+   - Compila en modo `Release` o `Debug`.
+
+2. **Copiar el archivo .addin**
+
+   - Copia `RevitTutor.addin` a la carpeta de add-ins de Revit, por ejemplo:
+
+     ```text
+     C:\Users\TU_USUARIO\AppData\Roaming\Autodesk\Revit\20XX\Addins\
+     ```
+
+     Sustituye `20XX` por la versión de Revit que usas.
+
+   - Edita el `.addin` si es necesario para que el `Assembly` apunte a la ruta correcta del `.dll` compilado (por ejemplo, `C:\Ruta\A\RevitTutorIA\bin\Debug\RevitTutorIA.dll`).
+
+3. **Iniciar Revit**
+
+   - Abre Autodesk Revit.
+   - Revit debería cargar el add-in al inicio.
+   - Busca el panel de `Tutor IA`:
+     - Dependiendo de la implementación, puede aparecer como DockablePane en la interfaz o como un comando en una pestaña específica.
+
+---
+
+## Uso
+
+1. Abre un proyecto en Revit.
+2. Asegúrate de que el panel **Tutor IA** está visible. Si no lo ves, revisa:
+   - La pestaña donde registraste el comando (si aplica).
+   - El panel de DockablePanes de Revit.
+3. En el panel:
+   - Escribe una pregunta en la caja de texto (por ejemplo:  
+     “¿Qué vistas tiene este modelo?”).
+   - Pulsa **Enviar**.
+4. El plugin:
+   - Lee el contexto del modelo actual (vistas y categorías).
+   - Construye un objeto con `question` + `context`.
+   - Serializa a JSON y lo muestra en el área de log.
+
+Este JSON es la base que se enviará a un modelo de IA en versiones posteriores del plugin.
+
+---
+
+## Roadmap (Próximas fases)
+
+- **Fase 2 – Integración con IA (BYOK)**  
+  - Añadir configuración para que cada usuario pueda introducir su propia API key (Claude / Gemini).
+  - Enviar el JSON `question + context` a un modelo de IA.
+  - Recibir una respuesta con:
+    - Explicación breve.
+    - Un “destino” (por ejemplo, tipo de vista o categoría).
+
+- **Fase 3 – Navegación guiada en Revit**  
+  - Mapear el “destino” a acciones dentro de Revit:
+    - Cambiar vista activa (planta, 3D, etc.).
+    - Seleccionar / resaltar elementos según categoría/propiedades.
+  - Mantener el plugin en modo solo lectura (sin modificaciones del modelo).
+
+- **Fase 4 – Integración con otros programas**  
+  - Extender el concepto a plugins similares para AutoCAD, otros softwares o una interfaz web.
+
+---
+
+## Licencia
+
+(Define aquí la licencia que quieras usar, por ejemplo MIT, o deja esta sección para más adelante.)
+
+---
+
+## Autor
+
+Proyecto desarrollado por **Guillermo Jhoel** como parte de una iniciativa de  
+tutor IA para estudiantes de Ingeniería y Arquitectura (BIM / Revit).  
+Portafolio: (agrega tu enlace de portafolio cuando lo tengas listo).

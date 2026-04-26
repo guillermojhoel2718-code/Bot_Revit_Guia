@@ -1,0 +1,10 @@
+﻿obj/
+bin/
+Addin/
+.vs/
+*.user
+*.suo
+*.pdb
+node_modules/
+.next/
+next/

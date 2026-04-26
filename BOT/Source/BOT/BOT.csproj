@@ -1,0 +1,129 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net8.0-windows</TargetFramework>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>false</UseWindowsForms>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <PlatformTarget>x64</PlatformTarget>
+    <RootNamespace>RevitTutor</RootNamespace>
+    <AssemblyName>BOT</AssemblyName>
+    <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
+    <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
+    <OutputPath>..\..\Addin\</OutputPath>
+    <Deterministic>false</Deterministic>
+    <GenerateAssemblyConfigurationAttribute>false</GenerateAssemblyConfigurationAttribute>
+    <GenerateAssemblyDescriptionAttribute>false</GenerateAssemblyDescriptionAttribute>
+    <GenerateAssemblyProductAttribute>false</GenerateAssemblyProductAttribute>
+    <GenerateAssemblyTitleAttribute>false</GenerateAssemblyTitleAttribute>
+    <GenerateAssemblyCompanyAttribute>false</GenerateAssemblyCompanyAttribute>
+    <GenerateAssemblyVersionAttribute>false</GenerateAssemblyVersionAttribute>
+    <NoWarn>MSB3277</NoWarn>
+  </PropertyGroup>
+
+  <PropertyGroup Condition="'$(Configuration)' == 'Debug'">
+    <Optimize>false</Optimize>
+    <DebugSymbols>true</DebugSymbols>
+    <DebugType>portable</DebugType>
+    <DefineConstants>DEBUG;TRACE</DefineConstants>
+  </PropertyGroup>
+
+  <!-- Referencias a RevitAPI (no se copian al output) -->
+  <ItemGroup>
+    <Reference Include="RevitAPI">
+      <HintPath>C:\Program Files\Autodesk\Revit 2025\RevitAPI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="RevitAPIUI">
+      <HintPath>C:\Program Files\Autodesk\Revit 2025\RevitAPIUI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+
+  <!-- Excluir archivos que no pertenecen al add-in C# -->
+  <ItemGroup>
+    <!-- Designer.cs es artefacto de macros de Revit, no aplica para add-ins -->
+    <Compile Remove="ThisApplication.Designer.cs" />
+    <!-- Hooks TS/TSX y CSS son blueprints web -->
+    <Compile Remove="hooks\**" />
+    <None Remove="hooks\**" />
+    <Content Remove="hooks\**" />
+    <!-- Paquete npm next/ -->
+    <Compile Remove="next\**" />
+    <Content Remove="next\**" />
+    <None Remove="next\**" />
+  </ItemGroup>
+
+  <!-- Sprites del bot arcade: se copian junto al BOT.dll en Addin/sprites/ -->
+  <ItemGroup>
+    <Content Include="Resources\sprites\estatico.png">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <TargetPath>sprites\estatico.png</TargetPath>
+    </Content>
+    <Content Include="Resources\sprites\sentado.png">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <TargetPath>sprites\sentado.png</TargetPath>
+    </Content>
+    <Content Include="Resources\sprites\brazos-cruzados.png">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <TargetPath>sprites\brazos-cruzados.png</TargetPath>
+    </Content>
+    <Content Include="Resources\sprites\emocionado.png">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <TargetPath>sprites\emocionado.png</TargetPath>
+    </Content>
+    <Content Include="Resources\sprites\salto.png">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <TargetPath>sprites\salto.png</TargetPath>
+    </Content>
+    <Content Include="Resources\sprites\espalda.png">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <TargetPath>sprites\espalda.png</TargetPath>
+    </Content>
+    <Content Include="Resources\sprites\lateral-derecho.png">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <TargetPath>sprites\lateral-derecho.png</TargetPath>
+    </Content>
+    <Content Include="Resources\sprites\lateral-derecho-caminata.png">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <TargetPath>sprites\lateral-derecho-caminata.png</TargetPath>
+    </Content>
+    <Content Include="Resources\sprites\lateral-derecho-corrida.png">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <TargetPath>sprites\lateral-derecho-corrida.png</TargetPath>
+    </Content>
+    <Content Include="Resources\sprites\lateral-izquierdo.png">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <TargetPath>sprites\lateral-izquierdo.png</TargetPath>
+    </Content>
+    <Content Include="Resources\sprites\lateral-izquierdo-caminata.png">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <TargetPath>sprites\lateral-izquierdo-caminata.png</TargetPath>
+    </Content>
+    <Content Include="Resources\sprites\lateral-izquierdo-corrida.png">
+      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
+      <TargetPath>sprites\lateral-izquierdo-corrida.png</TargetPath>
+    </Content>
+  </ItemGroup>
+
+  <!-- PostBuild: copia sprites desde sprite/sprit-dividido/ si existen -->
+  <Target Name="CopySprites" AfterTargets="Build">
+    <ItemGroup>
+      <SpriteSource Include="$(MSBuildProjectDirectory)\sprite\sprit-dividido\*.png"/>
+    </ItemGroup>
+    <MakeDir Directories="$(OutputPath)sprites\" Condition="!Exists('$(OutputPath)sprites\')" />
+    <Copy SourceFiles="@(SpriteSource)"
+          DestinationFolder="$(OutputPath)sprites\"
+          SkipUnchangedFiles="true"
+          Condition="@(SpriteSource->Count()) > 0"/>
+    <Message Text="Sprites copiados a $(OutputPath)sprites\" Importance="high"
+             Condition="@(SpriteSource->Count()) > 0"/>
+    <Warning Text="No se encontraron sprites en sprite/sprit-dividido/. Copialos manualmente a Addin/sprites/."
+             Condition="@(SpriteSource->Count()) == 0"/>
+  </Target>
+
+  <Target Name="PreBuild" BeforeTargets="PreBuildEvent">
+    <Exec Command="del &quot;$(OutputPath)*.dll&quot;" IgnoreExitCode="true" />
+  </Target>
+</Project>
