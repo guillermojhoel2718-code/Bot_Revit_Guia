@@ -29,6 +29,26 @@ namespace RevitTutor
                     _tutorPane
                 );
 
+                // Crear Ribbon Tab y Panel
+                string tabName = "Tutor IA";
+                try
+                {
+                    application.CreateRibbonTab(tabName);
+                }
+                catch { /* The tab may already exist */ }
+
+                RibbonPanel panel = application.CreateRibbonPanel(tabName, "Panel Tutor");
+
+                // Configurar el botón para mostrar el tutor
+                PushButtonData showTutorButtonData = new PushButtonData(
+                    "ShowTutorCommand",
+                    "Abrir Tutor",
+                    System.Reflection.Assembly.GetExecutingAssembly().Location,
+                    "RevitTutor.ShowTutorCommand");
+
+                showTutorButtonData.ToolTip = "Abre el panel del Tutor IA para hacer preguntas sobre el modelo.";
+                panel.AddItem(showTutorButtonData);
+
                 // Suscribirse al evento de documento abierto para pasar UIApplication
                 application.ControlledApplication.DocumentOpened += (sender, args) =>
                 {
@@ -63,6 +83,28 @@ namespace RevitTutor
         {
             _tutorPane = null;
             return Result.Succeeded;
+        }
+    }
+
+    [Autodesk.Revit.Attributes.Transaction(Autodesk.Revit.Attributes.TransactionMode.ReadOnly)]
+    public class ShowTutorCommand : IExternalCommand
+    {
+        public Result Execute(ExternalCommandData commandData, ref string message, Autodesk.Revit.DB.ElementSet elements)
+        {
+            try
+            {
+                DockablePane pane = commandData.Application.GetDockablePane(App.PaneId);
+                if (pane != null)
+                {
+                    pane.Show();
+                }
+                return Result.Succeeded;
+            }
+            catch (Exception ex)
+            {
+                message = ex.Message;
+                return Result.Failed;
+            }
         }
     }
 }

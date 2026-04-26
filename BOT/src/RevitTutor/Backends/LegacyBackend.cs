@@ -47,9 +47,14 @@ namespace RevitTutor
                 // o podría buscar una vista 3D en las VistasDisponibles del contexto y sugerirla.
             }
 
+            string apiKey = ConfigService.LoadApiKey();
+            string responsePrefix = string.IsNullOrEmpty(apiKey)
+                ? "No has configurado tu API key; uso solo reglas simples. "
+                : "He detectado tu API key; en la siguiente versión la usaré para llamar a la IA externa. ";
+
             return new TutorAnswer 
             { 
-                Text = "Respuesta simulada del LegacyBackend. He analizado el ModelContextService y he usado NavigationService si pediste ver elementos.",
+                Text = responsePrefix + "He analizado el ModelContext y he usado NavigationService si pediste ver elementos.",
                 SuggestedDestination = string.IsNullOrEmpty(suggestedDestination.CategoryName) && string.IsNullOrEmpty(suggestedDestination.ViewId) ? null : suggestedDestination
             };
         }

@@ -17,6 +17,7 @@ namespace RevitTutor
         public TutorPane()
         {
             InitializeComponent();
+            txtApiKey.Password = ConfigService.LoadApiKey();
         }
 
         /// <summary>
@@ -49,21 +50,18 @@ namespace RevitTutor
             {
                 if (_uiApp?.ActiveUIDocument == null)
                 {
-                    txtLog.Text = "⚠️ No hay documento activo. Abre un proyecto primero.";
+                    txtRespuesta.Text = "⚠️ No hay documento activo. Abre un proyecto primero.";
                     return;
                 }
 
                 string pregunta = txtQuestion.Text?.Trim() ?? string.Empty;
-                if (string.IsNullOrEmpty(pregunta))
+                if (string.IsNullOrEmpty(pregunta) || pregunta == "muéstrame los muros")
                 {
-                    txtLog.Text = "⚠️ Escribe una pregunta antes de enviar.";
+                    txtRespuesta.Text = "⚠️ Por favor, escribe una pregunta válida antes de enviar.";
                     return;
                 }
 
-                txtLog.Text = "⏳ Pensando...";
-                txtLog.Foreground = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromRgb(0xA5, 0xB4, 0xFC) // indigo-300
-                );
+                txtRespuesta.Text = "⏳ Pensando...";
 
                 // Obtener el backend adecuado según la versión
                 IRevitTutorBackend backend = RevitVersionHelper.CreateBackend(_uiApp);
@@ -80,32 +78,33 @@ namespace RevitTutor
                     await backend.NavigateToDestinationAsync(answer.SuggestedDestination);
                 }
 
-                // Armar log
-                var payload = new
-                {
-                    question = pregunta,
-                    context = context,
-                    answer = answer,
-                    backendUtilizado = backend.GetType().Name,
-                    timestamp = DateTime.Now.ToString("O")
-                };
-
-                // Serializar a JSON legible
-                string json = JsonSerializer.Serialize(payload, new JsonSerializerOptions
-                {
-                    WriteIndented = true,
-                    Encoder = System.Text.Encodings.Web.JavaScriptEncoder.UnsafeRelaxedJsonEscaping
-                });
-
-                txtLog.Text = json;
+                // Mostrar respuesta en lenguaje natural
+                txtRespuesta.Text = !string.IsNullOrEmpty(answer.Text) 
+                    ? answer.Text 
+                    : "Te llevo al destino sugerido en el modelo.";
             }
             catch (Exception ex)
             {
-                txtLog.Text = $"❌ Error: {ex.Message}";
-                txtLog.Foreground = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromRgb(0xFB, 0x71, 0x85) // rose-400
-                );
+                txtRespuesta.Text = $"❌ Error: {ex.Message}";
             }
+        }
+
+        private void txtQuestion_GotFocus(object sender, RoutedEventArgs e)
+        {
+            // Limpia el texto de placeholder cuando el usuario hace clic en el TextBox
+            if (txtQuestion.Text == "muéstrame los muros")
+            {
+                txtQuestion.Text = string.Empty;
+            }
+        }
+
+        private void btnSaveApiKey_Click(object sender, RoutedEventArgs e)
+        {
+            string key = txtApiKey.Password;
+            ConfigService.SaveApiKey(key);
+            txtRespuesta.Text = string.IsNullOrEmpty(key) 
+                ? "API key eliminada." 
+                : "API key guardada correctamente.";
         }
     }
 }
