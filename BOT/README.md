@@ -49,36 +49,29 @@ La idea final es que un modelo de IA pueda:
 
 ## Estructura del proyecto
 
-Archivos principales:
+Archivos y directorios principales:
 
-- `App.cs`  
-  Implementa `Autodesk.Revit.UI.IExternalApplication`.  
-  - Registra el DockablePane.
-  - Inicializa el panel `TutorPane`.
+- `src/RevitTutor/`
+  - `App.cs`: Punto de entrada del add-in. Implementa `IExternalApplication` y registra el DockablePane.
+  - `Backends/`:
+    - `IRevitTutorBackend.cs`: Interfaz común para el Tutor IA.
+    - `LegacyBackend.cs`: Para Revit <= 2026 usando integraciones manuales BYOK.
+    - `Revit2027McpBackend.cs`: Preparado para interactuar con Revit Public MCP Server (Revit 2027+).
+    - `RevitVersionHelper.cs`: Utilidad para instanciar el backend correcto según la versión.
+  - `Model/`: 
+    - `ModelContext.cs` y `Destination.cs`: Clases POCO con la estructura de datos.
+  - `Services/`:
+    - `ModelContextService.cs`: Extrae contexto en versiones legacy.
+    - `NavigationService.cs`: Controla la navegación en vistas y zoom (solo lectura).
+  - `UI/`:
+    - `TutorPane.xaml` / `TutorPane.xaml.cs`: Panel interactivo del Tutor IA.
+  - `RevitTutor.csproj`: Archivo de proyecto principal.
 
-- `TutorPane.xaml` / `TutorPane.xaml.cs`  
-  UI WPF del panel de “Tutor IA”.  
-  - Muestra el log (JSON generado).
-  - Permite escribir preguntas.
-  - Maneja el evento de clic del botón **Enviar**.
-
-- `ModelContext.cs`  
-  Clase POCO con la estructura del contexto del modelo, por ejemplo:
-  ```csharp
-  public class ModelContext
-  {
-      public List<string> ViewNames { get; set; }
-      public List<string> Categories { get; set; }
-  }
-  ```
-
-- `ModelContextService.cs`  
-  Métodos para construir el contexto a partir de `UIApplication` / `Document`:
-  - Obtiene vistas no plantilla.
-  - Obtiene categorías del proyecto.
-
-- `RevitTutor.addin`  
-  Archivo de configuración del add-in para que Revit cargue el plugin.
+- `Agentes/`: Documentos markdown con definiciones de los agentes IA que formarán parte de la lógica.
+- `Skills/`: Documentación y reglas para diseño, revisión y desarrollo en este repo.
+- `MCP/`: Documentación del protocolo MCP conceptual y diseño.
+- `hooks/`: Ganchos (React/TypeScript) listos para integrar en el portafolio web.
+- `RevitTutor.addin`: Archivo de configuración del add-in para Revit.
 
 ---
 

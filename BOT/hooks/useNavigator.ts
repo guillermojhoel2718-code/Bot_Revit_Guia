@@ -1,4 +1,5 @@
 // hooks/useNavigator.ts
+// Hook para la navegación visual (scroll suave) a las distintas secciones del portafolio o elementos del modelo.
 import { useCallback } from "react";
 
 export type DestinoId = string; // por ejemplo "#autocad-layers", "#revit-views"

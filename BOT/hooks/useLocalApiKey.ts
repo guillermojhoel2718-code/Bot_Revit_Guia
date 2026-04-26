@@ -1,4 +1,5 @@
 // hooks/useLocalApiKey.ts
+// Hook para gestionar el almacenamiento local de la API Key, permitiendo usar IA sin backend dedicado (BYOK).
 import { useEffect, useState } from "react";
 
 const STORAGE_KEY = "tutor_ia_api_key";

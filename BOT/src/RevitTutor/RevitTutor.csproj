@@ -7,7 +7,7 @@
     <Nullable>enable</Nullable>
     <PlatformTarget>x64</PlatformTarget>
     <RootNamespace>RevitTutor</RootNamespace>
-    <AssemblyName>BOT</AssemblyName>
+    <AssemblyName>RevitTutor</AssemblyName>
     <CopyLocalLockFileAssemblies>true</CopyLocalLockFileAssemblies>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <AppendRuntimeIdentifierToOutputPath>false</AppendRuntimeIdentifierToOutputPath>
@@ -43,8 +43,7 @@
 
   <!-- Excluir archivos que no pertenecen al add-in C# -->
   <ItemGroup>
-    <!-- Designer.cs es artefacto de macros de Revit, no aplica para add-ins -->
-    <Compile Remove="ThisApplication.Designer.cs" />
+    <!-- Designer.cs was removed, no need to exclude -->
     <!-- Hooks TS/TSX y CSS son blueprints web -->
     <Compile Remove="hooks\**" />
     <None Remove="hooks\**" />

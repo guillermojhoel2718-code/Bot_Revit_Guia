@@ -1,4 +1,5 @@
 // hooks/useBotChat.ts
+// Hook para gestionar el estado de los mensajes del chat y la comunicación con la API (IA) del portafolio.
 import { useState } from "react";
 
 export interface ChatMessage {

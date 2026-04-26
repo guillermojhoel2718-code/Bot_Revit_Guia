@@ -3,11 +3,11 @@
   <!--
     RevitTutorIA - Plugin de tutor IA (solo lectura)
     Se carga como macro desde la carpeta AppHookup.
-    El archivo BOT.dll se genera en ../../Addin/
+    El archivo RevitTutor.dll se genera en ../../Addin/
   -->
   <AddIn Type="Application">
     <Name>RevitTutorIA</Name>
-    <Assembly>BOT.dll</Assembly>
+    <Assembly>RevitTutor.dll</Assembly>
     <FullClassName>RevitTutor.App</FullClassName>
     <AddInId>a1b2c3d4-e5f6-7890-abcd-ef1234567890</AddInId>
     <VendorId>RevitTutorIA</VendorId>

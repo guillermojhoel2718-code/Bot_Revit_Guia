@@ -6,20 +6,6 @@ using Autodesk.Revit.UI;
 
 namespace RevitTutor
 {
-    /// <summary>
-    /// Modelo de datos que representa el contexto actual del modelo Revit.
-    /// Se serializa a JSON para enviar junto con la pregunta del usuario.
-    /// </summary>
-    public class ModelContext
-    {
-        public string NombreProyecto { get; set; } = string.Empty;
-        public string VistaActual { get; set; } = string.Empty;
-        public string TipoVistaActual { get; set; } = string.Empty;
-        public List<string> VistasDisponibles { get; set; } = new();
-        public List<string> CategoriasActivas { get; set; } = new();
-        public int ElementosSeleccionados { get; set; }
-        public List<string> IdsSeleccionados { get; set; } = new();
-    }
 
     /// <summary>
     /// Servicio de solo lectura que extrae contexto del modelo Revit activo.
@@ -50,7 +36,7 @@ namespace RevitTutor
         }
 
         /// <summary>
-        /// Obtiene las vistas del modelo que NO son plantillas.
+        /// Obtiene las vistas del modelo que NO son plantillas, incluyendo su ID.
         /// </summary>
         private static List<string> ObtenerVistas(Document doc)
         {
@@ -61,7 +47,7 @@ namespace RevitTutor
                     .OfClass(typeof(View))
                     .Cast<View>()
                     .Where(v => !v.IsTemplate)
-                    .Select(v => $"{v.ViewType}: {v.Name}")
+                    .Select(v => $"[{v.Id.Value}] {v.ViewType}: {v.Name}")
                     .OrderBy(name => name)
                     .Take(50) // Limitar para no saturar el JSON
                     .ToList();
@@ -73,25 +59,35 @@ namespace RevitTutor
         }
 
         /// <summary>
-        /// Obtiene las categorías de modelo activas (visibles) en la vista actual.
+        /// Obtiene las categorías de modelo activas con su conteo de elementos.
         /// </summary>
         private static List<string> ObtenerCategorias(Document doc)
         {
             try
             {
-                var categorias = doc.Settings.Categories;
-                var resultado = new List<string>();
+                var allElements = new FilteredElementCollector(doc)
+                    .WhereElementIsNotElementType()
+                    .ToElements();
 
-                foreach (Category cat in categorias)
+                var categoryCounts = new Dictionary<string, int>();
+
+                foreach (var el in allElements)
                 {
-                    // Solo categorías de modelo (no de anotación ni internas)
-                    if (cat.CategoryType == CategoryType.Model && cat.Name != null)
+                    if (el.Category != null && el.Category.CategoryType == CategoryType.Model)
                     {
-                        resultado.Add(cat.Name);
+                        string catName = el.Category.Name;
+                        if (!categoryCounts.ContainsKey(catName))
+                        {
+                            categoryCounts[catName] = 0;
+                        }
+                        categoryCounts[catName]++;
                     }
                 }
 
-                return resultado.OrderBy(c => c).ToList();
+                return categoryCounts
+                    .Select(kvp => $"{kvp.Key}: {kvp.Value} elementos")
+                    .OrderBy(c => c)
+                    .ToList();
             }
             catch
             {

@@ -41,9 +41,9 @@ namespace RevitTutor
         }
 
         /// <summary>
-        /// Al hacer clic en "Enviar": construye el contexto del modelo y lo muestra como JSON.
+        /// Al hacer clic en "Enviar": obtiene contexto vía backend y simula respuesta.
         /// </summary>
-        private void btnSend_Click(object sender, RoutedEventArgs e)
+        private async void btnSend_Click(object sender, RoutedEventArgs e)
         {
             try
             {
@@ -60,14 +60,33 @@ namespace RevitTutor
                     return;
                 }
 
-                // Construir contexto del modelo (solo lectura)
-                var context = ModelContextService.BuildContext(_uiApp);
+                txtLog.Text = "⏳ Pensando...";
+                txtLog.Foreground = new System.Windows.Media.SolidColorBrush(
+                    System.Windows.Media.Color.FromRgb(0xA5, 0xB4, 0xFC) // indigo-300
+                );
 
-                // Armar payload listo para IA
+                // Obtener el backend adecuado según la versión
+                IRevitTutorBackend backend = RevitVersionHelper.CreateBackend(_uiApp);
+
+                // Obtener contexto
+                var context = await backend.GetModelContextAsync();
+
+                // Preguntar a la IA
+                var answer = await backend.AskQuestionAsync(pregunta, context);
+
+                // Ejecutar navegación si la IA sugiere un destino
+                if (answer.SuggestedDestination != null)
+                {
+                    await backend.NavigateToDestinationAsync(answer.SuggestedDestination);
+                }
+
+                // Armar log
                 var payload = new
                 {
                     question = pregunta,
                     context = context,
+                    answer = answer,
+                    backendUtilizado = backend.GetType().Name,
                     timestamp = DateTime.Now.ToString("O")
                 };
 
@@ -79,9 +98,6 @@ namespace RevitTutor
                 });
 
                 txtLog.Text = json;
-                txtLog.Foreground = new System.Windows.Media.SolidColorBrush(
-                    System.Windows.Media.Color.FromRgb(0xA5, 0xB4, 0xFC) // indigo-300
-                );
             }
             catch (Exception ex)
             {
