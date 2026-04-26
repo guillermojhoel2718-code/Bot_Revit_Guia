@@ -13,12 +13,18 @@ namespace RevitTutor
         public static readonly DockablePaneId PaneId =
             new DockablePaneId(new Guid("B1C2D3E4-F5A6-7890-1234-567890ABCDEF"));
 
+        public static RevitTaskHandler TaskHandler { get; private set; }
+        public static ExternalEvent RevitEvent { get; private set; }
+
         private static TutorPane? _tutorPane;
 
         public Result OnStartup(UIControlledApplication application)
         {
             try
             {
+                TaskHandler = new RevitTaskHandler();
+                RevitEvent = ExternalEvent.Create(TaskHandler);
+
                 // Crear la instancia del panel WPF
                 _tutorPane = new TutorPane();
 

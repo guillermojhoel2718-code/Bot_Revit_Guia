@@ -63,23 +63,18 @@ namespace RevitTutor
                 }
 
                 // Auto-corrección de API Key al enviar (por si el usuario olvidó Guardar)
-                string apiKey = ConfigService.LoadApiKey();
+                var config = ConfigService.LoadConfig();
+                string apiKey = config.GeminiApiKey;
                 if (!string.IsNullOrEmpty(apiKey) && apiKey.StartsWith("Alza", StringComparison.OrdinalIgnoreCase))
                 {
                     apiKey = "AIza" + apiKey.Substring(4);
                     ConfigService.SaveApiKey(apiKey);
-                    txtApiKey.Text = apiKey;
+                    txtApiKey.Password = apiKey;
                 }
 
                 txtRespuesta.Text = "⏳ Pensando...";
+                UpdateBotComment("Pensando...");
                 SetBotSpriteState("thinking");
-
-                // Solo lanzamos el bot flotante si es una acción de "mostrar/seleccionar"
-                if (IsActionQuestion(pregunta))
-                {
-                    MoveBotToDrawingArea();
-                    SpawnFloatingBot();
-                }
 
                 // Obtener el backend adecuado según la versión
                 IRevitTutorBackend backend = RevitVersionHelper.CreateBackend(_uiApp);
@@ -90,24 +85,30 @@ namespace RevitTutor
                 // Preguntar a la IA
                 var answer = await backend.AskQuestionAsync(pregunta, context);
 
-                // Ejecutar navegación si la IA sugiere un destino
-                if (answer.SuggestedDestination != null)
+                // Solo lanzamos el bot flotante si es una acción
+                string shortMessage = answer.Message?.Split('\n')[0] ?? "Listo.";
+                if (IsActionQuestion(pregunta) || shortMessage.Contains("He "))
                 {
-                    await backend.NavigateToDestinationAsync(answer.SuggestedDestination);
+                    MoveBotToDrawingArea();
+                    SpawnFloatingBot(shortMessage);
                 }
 
                 // Mostrar respuesta en lenguaje natural
                 txtRespuesta.Text = answer.Message ?? "Listo, he procesado tu solicitud.";
+                UpdateBotComment("¡Listo!");
+                txtBotSummary.Text = answer.Summary ?? "";
                 
                 SetBotSpriteState("speaking");
                 
-                // Volver a sentado rápido y luego a idle
-                _ = System.Threading.Tasks.Task.Delay(1000).ContinueWith(_ =>
+                // Volver a idle
+                _ = System.Threading.Tasks.Task.Delay(3000).ContinueWith(_ =>
                 {
                     Dispatcher.Invoke(() => 
                     {
-                        SetBotSpriteState("sitting");
+                        UpdateBotComment("En espera");
+                        txtBotSummary.Text = "";
                         ResetBotPosition();
+                        SetBotSpriteState("idle");
                     });
                 });
                 
@@ -119,9 +120,21 @@ namespace RevitTutor
             catch (Exception ex)
             {
                 txtRespuesta.Text = $"❌ Error: {ex.Message}";
+                UpdateBotComment("Error");
                 SetBotSpriteState("idle");
                 ResetBotPosition();
             }
+        }
+
+        private void UpdateBotComment(string text)
+        {
+            Dispatcher.Invoke(() =>
+            {
+                if (txtBotStatus != null)
+                {
+                    txtBotStatus.Text = text;
+                }
+            });
         }
 
         private void SetBotSpriteState(string state)
@@ -177,37 +190,67 @@ namespace RevitTutor
                    low.Contains("suelo") || low.Contains("losa") || low.Contains("prend") || low.Contains("ocult");
         }
 
-        private void SpawnFloatingBot()
+        private void SpawnFloatingBot(string message)
         {
             try
             {
-                // Intentamos obtener la posición de este panel en pantalla
-                Point panelPos = this.PointToScreen(new Point(0, 0));
+                // Calcular la posición actual del bot en la pantalla para una transición suave
+                Point botScreenPos = imgBot.PointToScreen(new Point(0, 0));
                 
                 var floatingWindow = new Window
                 {
-                    Width = 100,
-                    Height = 100,
+                    Width = 300,
+                    Height = 150,
                     WindowStyle = WindowStyle.None,
                     AllowsTransparency = true,
                     Background = System.Windows.Media.Brushes.Transparent,
                     Topmost = true,
                     ShowInTaskbar = false,
-                    Left = panelPos.X,
-                    Top = panelPos.Y
+                    Left = botScreenPos.X,
+                    Top = botScreenPos.Y
                 };
+
+                var container = new Grid();
+                container.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(80) });
+                container.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
                 var botImg = new Image 
                 { 
                     Source = new System.Windows.Media.Imaging.BitmapImage(new Uri("pack://application:,,,/RevitTutor;component/Resources/sprites/lateral-izquierdo.png")),
                     Width = 80,
-                    Height = 80
+                    Height = 80,
+                    VerticalAlignment = VerticalAlignment.Center
                 };
-                floatingWindow.Content = botImg;
+                Grid.SetColumn(botImg, 0);
+                container.Children.Add(botImg);
 
+                var textBorder = new Border
+                {
+                    Background = System.Windows.Media.Brushes.White,
+                    BorderBrush = new System.Windows.Media.SolidColorBrush((Color)ColorConverter.ConvertFromString("#E2E8F0")),
+                    BorderThickness = new Thickness(2),
+                    CornerRadius = new CornerRadius(8),
+                    Padding = new Thickness(8),
+                    Margin = new Thickness(8,0,0,0),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Visibility = Visibility.Hidden
+                };
+
+                var textBlock = new TextBlock
+                {
+                    Text = message,
+                    TextWrapping = TextWrapping.Wrap,
+                    FontSize = 12,
+                    Foreground = System.Windows.Media.Brushes.Black
+                };
+                textBorder.Child = textBlock;
+                Grid.SetColumn(textBorder, 1);
+                container.Children.Add(textBorder);
+
+                floatingWindow.Content = container;
                 floatingWindow.Show();
 
-                // Animación de "caminata" (intercambio de frames)
+                // Animación de "caminata"
                 var walkingTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromMilliseconds(250) };
                 bool frameToggle = false;
                 walkingTimer.Tick += (s, e) =>
@@ -218,41 +261,51 @@ namespace RevitTutor
                 };
                 walkingTimer.Start();
 
-                // Animación de desplazamiento
+                // Destino: un poco a la izquierda del centro de la pantalla para que el globo de texto quede centrado
+                double targetX = SystemParameters.PrimaryScreenWidth / 2 - 150;
+                double targetY = SystemParameters.PrimaryScreenHeight / 2 - 50;
+
+                // Animación de desplazamiento (X)
                 var animX = new DoubleAnimation
                 {
-                    To = panelPos.X - 600,
-                    Duration = TimeSpan.FromSeconds(3.5),
+                    To = targetX,
+                    Duration = TimeSpan.FromSeconds(1.2),
                     EasingFunction = new QuadraticEase { EasingMode = EasingMode.EaseInOut }
                 };
 
-                // Efecto de "bobbing" (subir y bajar al caminar)
+                // Bobbing (Y) - simular flotación
                 var animY = new DoubleAnimation
                 {
-                    From = panelPos.Y,
-                    To = panelPos.Y - 15,
-                    Duration = TimeSpan.FromMilliseconds(400),
+                    From = botScreenPos.Y,
+                    To = botScreenPos.Y - 20,
+                    Duration = TimeSpan.FromMilliseconds(300),
                     AutoReverse = true,
-                    RepeatBehavior = RepeatBehavior.Forever // Bobbing infinito hasta que cierre
+                    RepeatBehavior = RepeatBehavior.Forever
                 };
 
-                var animFade = new DoubleAnimation
+                animX.Completed += (s, e) =>
                 {
-                    From = 1.0,
-                    To = 0.0,
-                    BeginTime = TimeSpan.FromSeconds(3.2),
-                    Duration = TimeSpan.FromSeconds(0.3)
-                };
-
-                animFade.Completed += (s, e) => 
-                {
+                    // Al detenerse, cambiar sprite a hablando y mostrar el mensaje
                     walkingTimer.Stop();
-                    floatingWindow.Close();
+                    animY.RepeatBehavior = new RepeatBehavior(1); // Detener el salto
+                    botImg.Source = new System.Windows.Media.Imaging.BitmapImage(new Uri("pack://application:,,,/RevitTutor;component/Resources/sprites/emocionado.png"));
+                    textBorder.Visibility = Visibility.Visible;
+
+                    // Cerrar después de 4 segundos
+                    var closeTimer = new System.Windows.Threading.DispatcherTimer { Interval = TimeSpan.FromSeconds(4) };
+                    closeTimer.Tick += (sender, args) =>
+                    {
+                        closeTimer.Stop();
+                        
+                        var animFade = new DoubleAnimation { To = 0.0, Duration = TimeSpan.FromSeconds(0.3) };
+                        animFade.Completed += (s2, e2) => floatingWindow.Close();
+                        floatingWindow.BeginAnimation(Window.OpacityProperty, animFade);
+                    };
+                    closeTimer.Start();
                 };
 
                 floatingWindow.BeginAnimation(Window.LeftProperty, animX);
                 floatingWindow.BeginAnimation(Window.TopProperty, animY);
-                floatingWindow.BeginAnimation(Window.OpacityProperty, animFade);
             }
             catch { /* Evitar crashes si falla la transformación de puntos */ }
         }
@@ -300,17 +353,45 @@ namespace RevitTutor
 
         private void UserControl_Loaded(object sender, RoutedEventArgs e)
         {
-            string apiKey = ConfigService.LoadApiKey();
-            if (!string.IsNullOrEmpty(apiKey))
+            var config = ConfigService.LoadConfig();
+            if (!string.IsNullOrEmpty(config.GeminiApiKey))
             {
-                txtApiKey.Text = apiKey;
+                txtApiKey.Password = config.GeminiApiKey;
+            }
+
+            if (config.ShowStartupHelp)
+            {
+                ShowStartupHelp();
+            }
+        }
+
+        private void ShowStartupHelp()
+        {
+            txtRespuesta.Text = "👋 ¡Hola! Soy RevitTutor. Puedo ayudarte con:\n\n" +
+                               "• Navegación: 've a la planta Nivel 1', 've al alzado Norte', 've a la vista 3D principal'.\n" +
+                               "• Visibilidad: 'oculta las anotaciones en esta vista', 'muestra solo las vigas'.\n" +
+                               "• Edición visual: 'limpia los colores'.\n" +
+                               "• Educación: 'enséñame a modelar una losa', 'explícame cómo dibujar una trabe'.\n" +
+                               "• Revisión de calidad: 'revisa la calidad del modelo estructural'.\n\n" +
+                               "Puedes clickear en 'Ver comandos sugeridos' para ver más opciones.";
+            UpdateBotComment("¡Listo para ayudarte!");
+            SetBotSpriteState("idle");
+        }
+
+        private void OnCommandSelected(object sender, SelectionChangedEventArgs e)
+        {
+            if (sender is ListBox listBox && listBox.SelectedItem is ListBoxItem item)
+            {
+                txtQuestion.Text = item.Content?.ToString();
+                // Deseleccionamos para que se pueda volver a clickear el mismo
+                listBox.SelectedIndex = -1;
             }
         }
 
         private void txtQuestion_GotFocus(object sender, RoutedEventArgs e)
         {
             // Limpia el texto de placeholder cuando el usuario hace clic en el TextBox
-            if (txtQuestion.Text == "muéstrame los muros")
+            if (txtQuestion.Text == "selecciona los muros" || txtQuestion.Text == "muéstrame los muros")
             {
                 txtQuestion.Text = string.Empty;
             }
@@ -324,18 +405,18 @@ namespace RevitTutor
 
         private void OnSaveApiKeyClick(object sender, RoutedEventArgs e)
         {
-            string apiKey = txtApiKey.Text?.Trim() ?? string.Empty;
+            string apiKey = txtApiKey.Password?.Trim() ?? string.Empty;
             
             // Auto-corrección de "Alza" por "AIza" (i mayúscula de IA)
             if (apiKey.StartsWith("Alza", StringComparison.OrdinalIgnoreCase))
             {
                 apiKey = "AIza" + apiKey.Substring(4);
-                txtApiKey.Text = apiKey;
+                txtApiKey.Password = apiKey;
                 MessageBox.Show("He corregido automáticamente el inicio de tu clave de 'Alza' a 'AIza' (con I mayúscula) para que funcione con Google.", "Corrección Automática", MessageBoxButton.OK, MessageBoxImage.Information);
             }
 
-            ConfigService.SaveApiKey(apiKey); // usa tu servicio existente
-            MessageBox.Show("API key guardada. Ahora el tutor usará IA de Gemini cuando sea posible.", "RevitTutor", MessageBoxButton.OK, MessageBoxImage.Information);
+            ConfigService.SaveApiKey(apiKey);
+            MessageBox.Show("Configuración guardada correctamente. El tutor ya puede usar IA avanzada.", "RevitTutor", MessageBoxButton.OK, MessageBoxImage.Information);
         }
     }
 }

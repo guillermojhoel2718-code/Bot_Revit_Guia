@@ -10,13 +10,6 @@ using Autodesk.Revit.UI;
 
 namespace RevitTutor
 {
-    public class IaSimpleAnswer
-    {
-        public string Text { get; set; } = string.Empty;
-        public string? Message { get; set; }
-        public Destination? SuggestedDestination { get; set; }
-    }
-
     public class LegacyBackend : IRevitTutorBackend
     {
         private readonly UIApplication _uiApp;
@@ -28,33 +21,149 @@ namespace RevitTutor
 
         public async Task<TutorAnswer> AskQuestionAsync(string question, ModelContext context)
         {
-            string apiKey = ConfigService.LoadApiKey();
-            bool hasKey = !string.IsNullOrEmpty(apiKey);
+            var config = ConfigService.LoadConfig();
+            string apiKey = config.GeminiApiKey;
+            LlmCommand cmd = null;
+            string geminiError = null;
+            bool isHowTo = DetectHowToQuestion(question);
 
-            // Intentamos Gemini para casi todo lo que no sea una acción directa local
-            if (hasKey && DetectIaIntent(question))
+            // 1) PRIORIDAD: Detectar si es una pregunta educativa/tutorial
+            if (isHowTo)
             {
-                try
-                {
-                    var geminiResponse = await CallGeminiAsync(question, context, apiKey);
-                    if (geminiResponse != null) 
-                    {
-                        return new TutorAnswer 
-                        { 
-                            Message = geminiResponse.Message ?? geminiResponse.Text,
-                            Text = geminiResponse.Text,
-                            SuggestedDestination = geminiResponse.SuggestedDestination
-                        };
-                    }
-                }
-                catch (Exception ex)
-                {
-                    // Fallback silencioso a lógica local si falla la red
-                    System.Diagnostics.Debug.WriteLine("Gemini Error: " + ex.Message);
-                }
+                cmd = LocalCommandParser.Parse(question);
+                cmd.Action = "how_to"; // Forzamos acción how_to si detectamos la intención educativa
+            }
+            else
+            {
+                // Prioridad Local para comandos operativos
+                cmd = LocalCommandParser.Parse(question);
             }
 
-            return BuildLocalAnswer(question, context);
+            // Si es QA o Wizard, forzamos local
+            bool isSpecialAction = cmd.Action == "model_quality_check" || cmd.Action == "prepare_structural_view" || cmd.Action == "how_to";
+            bool needsAiCommand = !isSpecialAction && cmd.Action == "none";
+
+            if (needsAiCommand && !string.IsNullOrEmpty(apiKey))
+            {
+                try { cmd = await CallGeminiForCommandAsync(question, context, apiKey); }
+                catch (Exception ex) { geminiError = $"IA no disponible: {ex.Message}"; }
+            }
+
+            if (cmd == null) cmd = LocalCommandParser.Parse(question);
+
+            // 2) EJECUCIÓN LOCAL
+            CommandExecutionResult execResult;
+            if (cmd.Action == "how_to")
+            {
+                execResult = GetStaticTutorial(cmd, question);
+            }
+            else
+            {
+                execResult = await CommandExecutor.ExecuteAsync(cmd, context, _uiApp);
+            }
+
+            // 3) EXPLICACIÓN EDUCATIVA ADICIONAL (Opcional por IA)
+            string aiEducationalText = null;
+            if (isHowTo && !string.IsNullOrEmpty(apiKey))
+            {
+                try { aiEducationalText = await CallGeminiForEducationalExplanationAsync(question, context, execResult, apiKey); }
+                catch { /* fallback silencioso */ }
+            }
+
+            // 4) CONSTRUIR MENSAJE FINAL
+            string finalMessage = BuildFinalEducationalMessage(cmd, execResult, context, aiEducationalText);
+
+            return new TutorAnswer
+            {
+                Message = finalMessage,
+                Text = finalMessage,
+                Summary = execResult.UserMessageShort,
+                SuggestedDestination = execResult.ToDestination()
+            };
+        }
+
+        private string BuildFinalEducationalMessage(LlmCommand cmd, CommandExecutionResult execResult, ModelContext context, string aiText)
+        {
+            if (cmd.Action == "none")
+            {
+                return "No entendí la instrucción, pero puedo ayudarte con:\n" +
+                       "• Revisión de calidad del modelo (QA)\n" +
+                       "• Preparar vistas estructurales\n" +
+                       "• Mostrar/ocultar y seleccionar categorías estructurales\n" +
+                       "• Tutoriales sobre cómo modelar muros, vigas y columnas.";
+            }
+
+            StringBuilder sb = new StringBuilder();
+
+            // A) Acción realizada
+            sb.AppendLine("✅ " + (string.IsNullOrEmpty(execResult.ActionDescription) ? execResult.UserMessage : execResult.ActionDescription));
+            sb.AppendLine();
+
+            // B) Capa Educativa Local
+            if (!string.IsNullOrEmpty(execResult.EducationalContext))
+            {
+                sb.AppendLine("🎓 Por qué es importante:");
+                sb.AppendLine(execResult.EducationalContext);
+                sb.AppendLine();
+            }
+
+            // C) Pasos de QA o Acción
+            if (execResult.Steps != null && execResult.Steps.Length > 0)
+            {
+                sb.AppendLine("📋 Detalles:");
+                foreach (var step in execResult.Steps) sb.AppendLine($"• {step}");
+                sb.AppendLine();
+            }
+
+            // D) Explicación de IA (si existe)
+            if (!string.IsNullOrEmpty(aiText))
+            {
+                sb.AppendLine("📖 Tutorial Avanzado:");
+                sb.AppendLine(aiText);
+                sb.AppendLine();
+            }
+
+            // E) Tip final
+            sb.AppendLine("💡 Tip del Tutor:");
+            if (cmd.Action == "model_quality_check")
+                sb.AppendLine("• Recuerda que un modelo limpio es la base para un análisis estructural exitoso.");
+            else
+                sb.AppendLine("• Puedes pedirme 'explica cómo modelar...' para aprender más sobre Revit.");
+
+            return sb.ToString();
+        }
+
+        private async Task<string> CallGeminiForEducationalExplanationAsync(string question, ModelContext context, CommandExecutionResult localResult, string apiKey)
+        {
+            using var client = new HttpClient();
+            client.Timeout = TimeSpan.FromSeconds(20);
+
+            var prompt = $@"El plugin RevitTutor ejecutó: {localResult.ActionDescription}.
+Pregunta del usuario: {question}.
+Contexto: Vista '{context.VistaActual}', Tipo: {context.TipoVistaActual}.
+
+Eres un tutor para estudiantes de ingeniería. Explica brevemente por qué esta acción es importante y cómo modelar correctamente.
+Formato:
+- Contexto (1 frase)
+- Pasos clave (lista corta)
+- Tip BIM (1 frase)
+Responde en español.";
+
+            var payload = new { contents = new[] { new { parts = new[] { new { text = prompt } } } } };
+            string url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={apiKey}";
+            
+            var json = JsonSerializer.Serialize(payload);
+            using var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var response = await client.PostAsync(url, content);
+            if (!response.IsSuccessStatusCode) return null;
+            
+            var responseJson = await response.Content.ReadAsStringAsync();
+            var doc = JsonDocument.Parse(responseJson);
+            var root = doc.RootElement;
+            if (!root.TryGetProperty("candidates", out var candidates) || candidates.GetArrayLength() == 0) return null;
+
+            return candidates[0].GetProperty("content").GetProperty("parts")[0].GetProperty("text").GetString();
         }
 
         public Task<ModelContext> GetModelContextAsync()
@@ -64,89 +173,135 @@ namespace RevitTutor
 
         public Task NavigateToDestinationAsync(Destination destination)
         {
-            return NavigationService.NavigateToAsync(_uiApp, destination);
+            return Task.CompletedTask;
         }
 
-        private bool DetectIaIntent(string q)
+        private bool DetectHowToQuestion(string q)
         {
-            var low = q.ToLowerInvariant();
-            // Si pregunta "como", "porque", "que es" o pide explicaciones, va a la IA
-            return low.Contains("como") || low.Contains("cómo") || low.Contains("que") || 
-                   low.Contains("explic") || low.Contains("ensena") || low.Contains("enseña") ||
-                   low.Contains("paso") || low.Contains("duda");
+            if (string.IsNullOrWhiteSpace(q)) return false;
+            var low = q.ToLowerInvariant().Replace("á","a").Replace("é","e").Replace("í","i").Replace("ó","o").Replace("ú","u");
+            return low.Contains("como") || low.Contains("explica") || low.Contains("paso") || 
+                   low.Contains("dibuja") || low.Contains("crea") || low.Contains("hace") || 
+                   low.Contains("ensena") || low.Contains("tutorial") || low.Contains("guia");
         }
 
-        private TutorAnswer BuildLocalAnswer(string question, ModelContext context)
+        private string LastGeminiError = "";
+
+        private async Task<LlmCommand> CallGeminiForCommandAsync(string question, ModelContext context, string apiKey)
         {
-            var dest = new Destination();
-            string q = question.ToLower().Replace("á","a").Replace("é","e").Replace("í","i").Replace("ó","o").Replace("ú","u");
-            string msg = "Soy tu tutor de Revit. Puedo resaltar elementos o explicarte procesos.";
-
-            // Categorías (con algo de tolerancia a errores)
-            bool foundCat = false;
-            if (q.Contains("muro") || q.Contains("wall") || q.Contains("mro")) { dest.CategoryName = "OST_Walls"; foundCat = true; }
-            else if (q.Contains("suelo") || q.Contains("losa") || q.Contains("floor") || q.Contains("selo")) { dest.CategoryName = "OST_Floors"; foundCat = true; }
-            else if (q.Contains("pilar") || q.Contains("columna") || q.Contains("column")) { dest.CategoryName = "OST_StructuralColumns"; foundCat = true; }
-            else if (q.Contains("puerta") || q.Contains("door")) { dest.CategoryName = "OST_Doors"; foundCat = true; }
-
-            // Acciones
-            if (q.Contains("ocult") || q.Contains("apagar") || q.Contains("escond"))
-            {
-                dest.Action = "HIDE_CATEGORY";
-                msg = "Ocultando elementos seleccionados.";
-            }
-            else if (q.Contains("mostr") || q.Contains("muestr") || q.Contains("ver") || q.Contains("prend") || q.Contains("selec") || q.Contains("donde"))
-            {
-                if (q.Contains("todo")) dest.Action = "SHOW_ALL";
-                else dest.Action = "SHOW_CATEGORY";
-                dest.Highlight = true;
-                msg = "Buscando y seleccionando los elementos en el modelo.";
-            }
-            else if (q.Contains("3d"))
-            {
-                dest.ViewId = "3D";
-                msg = "Cambiando a vista 3D.";
-            }
-
-            return new TutorAnswer 
-            { 
-                Message = msg, 
-                Text = msg, 
-                SuggestedDestination = (foundCat || dest.Action != null || dest.ViewId != null) ? dest : null 
-            };
-        }
-
-        private async Task<IaSimpleAnswer?> CallGeminiAsync(string question, ModelContext context, string apiKey)
-        {
+            LastGeminiError = "";
             ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
-            var prompt = $@"Eres un Tutor de Revit. Responde PASO A PASO. 
-Usa JSON: {{ ""message"": ""Explicación"", ""suggestedDestination"": {{ ""categoryName"": ""OST_Walls"", ""highlight"": true, ""action"": ""SHOW_CATEGORY"" }} }}
-Pregunta: {question}
-Contexto: {context.VistaActual}";
-            
-            var payload = new { contents = new[] { new { parts = new[] { new { text = prompt } } } } };
-            string url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={apiKey}";
-
             using var client = new HttpClient();
-            client.Timeout = TimeSpan.FromSeconds(15);
-            using var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
-            var response = await client.PostAsync(url, content);
-            if (!response.IsSuccessStatusCode) return null;
+            client.Timeout = TimeSpan.FromSeconds(30);
 
-            string responseJson = await response.Content.ReadAsStringAsync();
-            var gemini = JsonSerializer.Deserialize<GeminiResponse>(responseJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            string? text = gemini?.Candidates?.FirstOrDefault()?.Content?.Parts?.FirstOrDefault()?.Text;
+            var prompt = BuildCommandPromptForGemini(question, context);
+
+            var payload = new
+            {
+                contents = new[] { new { parts = new[] { new { text = prompt } } } }
+            };
+
+            string url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-flash-latest:generateContent?key={apiKey}";
+            var json = JsonSerializer.Serialize(payload);
+            using var content = new StringContent(json, Encoding.UTF8, "application/json");
+
+            var response = await client.PostAsync(url, content);
+            var responseJson = await response.Content.ReadAsStringAsync();
+
+            if (!response.IsSuccessStatusCode)
+            {
+                LastGeminiError = $"Error {response.StatusCode}: {responseJson}";
+                return null;
+            }
+
+            var doc = JsonDocument.Parse(responseJson);
+            var root = doc.RootElement;
+            if (!root.TryGetProperty("candidates", out var candidates) || candidates.GetArrayLength() == 0) return null;
+
+            var contentElem = candidates[0].GetProperty("content");
+            var parts = contentElem.GetProperty("parts");
+            if (parts.GetArrayLength() == 0) return null;
+
+            string text = parts[0].GetProperty("text").GetString();
             if (string.IsNullOrEmpty(text)) return null;
 
-            try {
-                var clean = text.Replace("```json", "").Replace("```", "").Trim();
-                return JsonSerializer.Deserialize<IaSimpleAnswer>(clean, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            } catch { return new IaSimpleAnswer { Text = text.Trim(), Message = text.Trim() }; }
+            text = text.Replace("```json", "").Replace("```", "").Trim();
+
+            try
+            {
+                return JsonSerializer.Deserialize<LlmCommand>(text, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private string BuildCommandPromptForGemini(string question, ModelContext context)
+        {
+            return $@"Eres un experto en Revit API y tutor educativo. Traduce la pregunta a JSON.
+Contexto: Vista '{context.VistaActual}', Tipo: {context.TipoVistaActual}.
+
+Esquema JSON:
+{{
+  ""action"": ""select_category""|""hide_category""|""show_category""|""isolate_category""|""unhide_all""|""reset_all_overrides""|""paint""|""reset_paint""|""go_to_view_3d""|""go_to_view_plan""|""show_project_parameters""|""none"",
+  ""categories"": [""walls"", ""floors"", ""doors"", ""windows"", ""columns"", ""beams""],
+  ""viewName"": ""string"",
+  ""color"": ""red""|""blue""|""green""|""yellow""|""orange""|""none"",
+  ""maxVolume"": number,
+  ""minVolume"": number,
+  ""explanation"": ""Lista numerada de 3-5 pasos sobre cómo hacerlo manualmente + un Tip.""
+}}
+
+Instrucciones:
+- Si es una pregunta de 'cómo hacer' algo manual, pon los pasos en 'explanation'.
+- 'categories' es una LISTA (siempre).
+- Responde SOLO JSON.";
+        }
+
+        private CommandExecutionResult GetStaticTutorial(LlmCommand cmd, string question)
+        {
+            var result = new CommandExecutionResult();
+            var steps = new List<string>();
+
+            if (cmd.Categories.Contains("walls"))
+            {
+                result.ActionDescription = "Tutorial: Cómo modelar Muros Estructurales";
+                steps.Add("Selecciona la pestaña 'Estructura' > 'Muro'.");
+                steps.Add("En el selector de tipos, elige un muro de concreto o mampostería.");
+                steps.Add("Configura la altura (hasta el nivel superior) y la línea de ubicación.");
+                steps.Add("Dibuja el muro haciendo clic en el origen y fin.");
+                result.EducationalContext = "Los muros estructurales deben estar correctamente vinculados a los niveles para asegurar la transferencia de cargas en el modelo analítico.";
+            }
+            else if (cmd.Categories.Contains("floors"))
+            {
+                result.ActionDescription = "Tutorial: Cómo modelar Suelos/Losas";
+                steps.Add("Ve a 'Estructura' > 'Suelo' > 'Suelo estructural'.");
+                steps.Add("Usa las herramientas de dibujo para definir el contorno (boceto cerrado).");
+                steps.Add("Asegúrate de que no haya líneas encimadas o espacios abiertos.");
+                steps.Add("Haz clic en el check verde para finalizar.");
+                result.EducationalContext = "El contorno del suelo define el área de carga. Asegúrate de alinear los bordes con los ejes de vigas o muros.";
+            }
+            else if (cmd.Categories.Contains("beams"))
+            {
+                result.ActionDescription = "Tutorial: Cómo modelar Vigas";
+                steps.Add("Ve a 'Estructura' > 'Viga'.");
+                steps.Add("Carga la familia de viga necesaria si no existe.");
+                steps.Add("Dibuja de eje a eje o usa la herramienta 'En rejillas'.");
+                result.EducationalContext = "Las vigas se dibujan en el nivel actual pero su geometría se proyecta hacia abajo por defecto.";
+            }
+            else
+            {
+                result.ActionDescription = "Guía del Tutor";
+                steps.Add("Puedo ayudarte con: Muros, Suelos, Vigas y Columnas.");
+                steps.Add("Intenta preguntar: '¿Cómo modelo un muro?'");
+                result.EducationalContext = "BIM no es solo dibujar, es construir digitalmente con información precisa.";
+            }
+
+            result.Steps = steps.ToArray();
+            result.UserMessage = "He preparado una guía paso a paso para ti.";
+            result.UserMessageShort = "Guía mostrada";
+            return result;
         }
     }
-
-    public class GeminiResponse { public List<Candidate> Candidates { get; set; } }
-    public class Candidate { public Content Content { get; set; } }
-    public class Content { public List<Part> Parts { get; set; } }
-    public class Part { public string Text { get; set; } }
 }

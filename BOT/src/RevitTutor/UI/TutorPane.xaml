@@ -46,11 +46,12 @@
 
     <Grid Margin="16">
         <Grid.RowDefinitions>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="*"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
-            <RowDefinition Height="Auto"/>
+            <RowDefinition Height="Auto"/> <!-- Titulo -->
+            <RowDefinition Height="*"/>    <!-- Respuesta -->
+            <RowDefinition Height="Auto"/> <!-- Sugerencias -->
+            <RowDefinition Height="Auto"/> <!-- Input -->
+            <RowDefinition Height="Auto"/> <!-- Boton -->
+            <RowDefinition Height="Auto"/> <!-- API Key -->
         </Grid.RowDefinitions>
 
         <!-- Encabezado (título) -->
@@ -58,54 +59,71 @@
             <TextBlock Text="Tutor IA para Revit"
                        FontSize="20" FontWeight="Bold"
                        Foreground="{StaticResource PrimaryColor}"/>
-            <TextBlock Text="Haz una pregunta sobre el modelo y te llevaré a la vista o elementos relevantes."
+            <TextBlock Text="Haz una pregunta sobre el modelo y te llevaré a la vista o elementos relevantes. Prueba también comandos como: 'selecciona los muros', 've a la vista 3D' o 'ayúdame con este nivel'."
                        FontSize="12"
                        Foreground="{StaticResource TextSub}"
                        TextWrapping="Wrap"
                        Margin="0,4,0,0"/>
         </StackPanel>
 
-        <!-- Zona central: sprite + texto de respuesta -->
+        <!-- Zona central: texto de respuesta principal -->
         <Border Grid.Row="1" CornerRadius="12"
                 Background="{StaticResource BgWhite}"
                 BorderBrush="{StaticResource AccentColor}"
                 BorderThickness="2"
                 Margin="0,0,0,16" Padding="12">
-            <Grid>
-                <Grid.ColumnDefinitions>
-                    <ColumnDefinition Width="Auto"/>
-                    <ColumnDefinition Width="*"/>
-                </Grid.ColumnDefinitions>
-                
-                <!-- Sprite en contenedor animable -->
-                <Grid x:Name="BotContainer" Grid.Column="0" VerticalAlignment="Top" Margin="0,0,12,0">
-                    <Grid.RenderTransform>
-                        <TranslateTransform x:Name="BotTransform" />
-                    </Grid.RenderTransform>
-                    <Image x:Name="imgBot" Width="64" Height="64" 
-                           Stretch="Uniform" HorizontalAlignment="Center"
-                           Source="pack://application:,,,/RevitTutor;component/Resources/sprites/estatico.png" />
-                </Grid>
-                
-                <!-- Texto de respuesta -->
-                <ScrollViewer Grid.Column="1" VerticalScrollBarVisibility="Auto">
-                    <TextBlock x:Name="txtRespuesta"
-                               Text="Haz una pregunta sobre el modelo (por ejemplo: 'muéstrame los muros') y te guiaré."
-                               Foreground="{StaticResource TextMain}"
-                               FontSize="14"
-                               TextWrapping="Wrap" />
-                </ScrollViewer>
-            </Grid>
+            <ScrollViewer VerticalScrollBarVisibility="Auto">
+                <TextBlock x:Name="txtRespuesta"
+                           Text="Haz una pregunta sobre el modelo (por ejemplo: 'selecciona los muros y suelos') y te guiaré."
+                           Foreground="{StaticResource TextMain}"
+                           FontSize="14"
+                           TextWrapping="Wrap" />
+            </ScrollViewer>
         </Border>
 
+        <!-- Comandos Sugeridos -->
+        <Expander Grid.Row="2" Header="Ver comandos sugeridos" 
+                  Foreground="{StaticResource TextSub}" FontSize="12"
+                  Margin="0,0,0,12" Background="Transparent">
+            <Border Background="{StaticResource BgWhite}" CornerRadius="8" 
+                    BorderBrush="{StaticResource BorderSoft}" BorderThickness="1" 
+                    Padding="4" MaxHeight="150">
+                <ScrollViewer VerticalScrollBarVisibility="Auto">
+                    <StackPanel>
+                        <TextBlock Text="Navegación" FontWeight="Bold" Margin="4,4,4,2" FontSize="11"/>
+                        <ListBox x:Name="lstNavCommands" BorderThickness="0" Background="Transparent" SelectionChanged="OnCommandSelected">
+                            <ListBoxItem Content="ve a la planta Nivel 1" Padding="4,2"/>
+                            <ListBoxItem Content="ve al alzado Norte" Padding="4,2"/>
+                            <ListBoxItem Content="ve a la vista 3D principal" Padding="4,2"/>
+                        </ListBox>
+
+                        <TextBlock Text="Visibilidad" FontWeight="Bold" Margin="4,8,4,2" FontSize="11"/>
+                        <ListBox x:Name="lstVisCommands" BorderThickness="0" Background="Transparent" SelectionChanged="OnCommandSelected">
+                            <ListBoxItem Content="muestra los muros" Padding="4,2"/>
+                            <ListBoxItem Content="oculta las anotaciones" Padding="4,2"/>
+                            <ListBoxItem Content="muestra solo las vigas" Padding="4,2"/>
+                            <ListBoxItem Content="limpia los colores" Padding="4,2"/>
+                        </ListBox>
+
+                        <TextBlock Text="Educativo y Calidad" FontWeight="Bold" Margin="4,8,4,2" FontSize="11"/>
+                        <ListBox x:Name="lstEduCommands" BorderThickness="0" Background="Transparent" SelectionChanged="OnCommandSelected">
+                            <ListBoxItem Content="enséñame a modelar una losa" Padding="4,2"/>
+                            <ListBoxItem Content="explícame cómo dibujar una trabe" Padding="4,2"/>
+                            <ListBoxItem Content="revisión de calidad" Padding="4,2"/>
+                        </ListBox>
+                    </StackPanel>
+                </ScrollViewer>
+            </Border>
+        </Expander>
+
         <!-- Campo de pregunta -->
-        <Border Grid.Row="2" CornerRadius="8"
+        <Border Grid.Row="3" CornerRadius="8"
                 Background="{StaticResource BgWhite}"
                 BorderBrush="{StaticResource BorderSoft}"
                 BorderThickness="1"
                 Margin="0,0,0,12">
             <TextBox x:Name="txtQuestion"
-                     Text="muéstrame los muros"
+                     Text="selecciona los muros"
                      Background="Transparent"
                      Foreground="{StaticResource TextMain}"
                      FontSize="14"
@@ -117,16 +135,41 @@
                      GotFocus="txtQuestion_GotFocus"/>
         </Border>
 
-        <!-- Botón Preguntar al tutor -->
-        <Button Grid.Row="3"
-                x:Name="btnSend"
-                Content="Preguntar al tutor"
-                Style="{StaticResource AskButtonStyle}"
-                Click="btnSend_Click"
-                HorizontalAlignment="Stretch"/>
+        <!-- Botón Preguntar al tutor y Sprite de estado -->
+        <Grid Grid.Row="4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <Button x:Name="btnSend"
+                    Grid.Column="0"
+                    Content="Preguntar al tutor"
+                    Style="{StaticResource AskButtonStyle}"
+                    Click="btnSend_Click"
+                    HorizontalAlignment="Stretch"/>
+
+            <StackPanel Grid.Column="1" Orientation="Vertical" VerticalAlignment="Center" Margin="12,0,0,0">
+                <Grid x:Name="BotContainer" HorizontalAlignment="Center">
+                    <Grid.RenderTransform>
+                        <TranslateTransform x:Name="BotTransform" />
+                    </Grid.RenderTransform>
+                    <Image x:Name="imgBot" Width="48" Height="48" 
+                           Stretch="Uniform"
+                           Source="pack://application:,,,/RevitTutor;component/Resources/sprites/estatico.png" />
+                </Grid>
+                <TextBlock x:Name="txtBotStatus" Text="En espera" 
+                           Foreground="{StaticResource TextSub}" FontSize="11" 
+                           HorizontalAlignment="Center" Margin="0,4,0,0"/>
+                <TextBlock x:Name="txtBotSummary" Text="" 
+                           Foreground="{StaticResource PrimaryColor}" FontSize="10" FontWeight="Bold"
+                           HorizontalAlignment="Center" Margin="0,2,0,0"
+                           TextWrapping="Wrap" MaxWidth="100" TextAlignment="Center"/>
+            </StackPanel>
+        </Grid>
 
         <!-- Sección BYOK -->
-        <StackPanel Grid.Row="4" Margin="0,16,0,0">
+        <StackPanel Grid.Row="5" Margin="0,16,0,0">
             <TextBlock Text="Para usar IA avanzada, consigue tu API key de Gemini:" TextWrapping="Wrap" Margin="0,0,0,4" Foreground="{StaticResource TextSub}" FontSize="12"/>
             <TextBlock Margin="0,0,0,8" FontSize="11">
                 <Hyperlink NavigateUri="https://aistudio.google.com/apikey" RequestNavigate="OnApiKeyLinkClick">
@@ -140,7 +183,7 @@
                     <ColumnDefinition Width="*"/>
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
-                <TextBox x:Name="txtApiKey"
+                <PasswordBox x:Name="txtApiKey"
                          Grid.Column="0"
                          Background="{StaticResource BgWhite}"
                          Foreground="{StaticResource TextMain}"

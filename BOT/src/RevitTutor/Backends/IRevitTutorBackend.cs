@@ -9,6 +9,7 @@ namespace RevitTutor
     {
         public string Text { get; set; } = string.Empty;
         public string? Message { get; set; }
+        public string? Summary { get; set; } // Resumen corto para el sprite
         public Destination? SuggestedDestination { get; set; }
     }
 
