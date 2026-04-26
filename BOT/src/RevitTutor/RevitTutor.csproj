@@ -56,54 +56,18 @@
 
   <!-- Sprites del bot arcade: se copian junto al BOT.dll en Addin/sprites/ -->
   <ItemGroup>
-    <Content Include="Resources\sprites\estatico.png">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-      <TargetPath>sprites\estatico.png</TargetPath>
-    </Content>
-    <Content Include="Resources\sprites\sentado.png">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-      <TargetPath>sprites\sentado.png</TargetPath>
-    </Content>
-    <Content Include="Resources\sprites\brazos-cruzados.png">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-      <TargetPath>sprites\brazos-cruzados.png</TargetPath>
-    </Content>
-    <Content Include="Resources\sprites\emocionado.png">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-      <TargetPath>sprites\emocionado.png</TargetPath>
-    </Content>
-    <Content Include="Resources\sprites\salto.png">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-      <TargetPath>sprites\salto.png</TargetPath>
-    </Content>
-    <Content Include="Resources\sprites\espalda.png">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-      <TargetPath>sprites\espalda.png</TargetPath>
-    </Content>
-    <Content Include="Resources\sprites\lateral-derecho.png">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-      <TargetPath>sprites\lateral-derecho.png</TargetPath>
-    </Content>
-    <Content Include="Resources\sprites\lateral-derecho-caminata.png">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-      <TargetPath>sprites\lateral-derecho-caminata.png</TargetPath>
-    </Content>
-    <Content Include="Resources\sprites\lateral-derecho-corrida.png">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-      <TargetPath>sprites\lateral-derecho-corrida.png</TargetPath>
-    </Content>
-    <Content Include="Resources\sprites\lateral-izquierdo.png">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-      <TargetPath>sprites\lateral-izquierdo.png</TargetPath>
-    </Content>
-    <Content Include="Resources\sprites\lateral-izquierdo-caminata.png">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-      <TargetPath>sprites\lateral-izquierdo-caminata.png</TargetPath>
-    </Content>
-    <Content Include="Resources\sprites\lateral-izquierdo-corrida.png">
-      <CopyToOutputDirectory>Always</CopyToOutputDirectory>
-      <TargetPath>sprites\lateral-izquierdo-corrida.png</TargetPath>
-    </Content>
+    <Resource Include="Resources\sprites\estatico.png" />
+    <Resource Include="Resources\sprites\sentado.png" />
+    <Resource Include="Resources\sprites\brazos-cruzados.png" />
+    <Resource Include="Resources\sprites\emocionado.png" />
+    <Resource Include="Resources\sprites\salto.png" />
+    <Resource Include="Resources\sprites\espalda.png" />
+    <Resource Include="Resources\sprites\lateral-derecho.png" />
+    <Resource Include="Resources\sprites\lateral-derecho-caminata.png" />
+    <Resource Include="Resources\sprites\lateral-derecho-corrida.png" />
+    <Resource Include="Resources\sprites\lateral-izquierdo.png" />
+    <Resource Include="Resources\sprites\lateral-izquierdo-caminata.png" />
+    <Resource Include="Resources\sprites\lateral-izquierdo-corrida.png" />
   </ItemGroup>
 
   <!-- PostBuild: copia sprites desde sprite/sprit-dividido/ si existen -->

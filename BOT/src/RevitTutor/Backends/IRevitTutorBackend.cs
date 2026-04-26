@@ -8,6 +8,7 @@ namespace RevitTutor
     public class TutorAnswer
     {
         public string Text { get; set; } = string.Empty;
+        public string? Message { get; set; }
         public Destination? SuggestedDestination { get; set; }
     }
 

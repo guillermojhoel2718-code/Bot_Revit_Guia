@@ -8,5 +8,6 @@ namespace RevitTutor
         public string? ViewId { get; set; }
         public string? CategoryName { get; set; }
         public bool Highlight { get; set; }
+        public string? Action { get; set; } // "HIDE", "SHOW", "ISOLATE", "HIDE_CATEGORY", "SHOW_CATEGORY"
     }
 }
