@@ -14,11 +14,9 @@ namespace RevitTutor
             {
                 var uiDoc = uiApp.ActiveUIDocument;
                 var doc = uiDoc?.Document;
+                if (uiDoc == null || doc == null || destination == null) return Task.CompletedTask;
 
-                if (uiDoc == null || doc == null || destination == null)
-                    return Task.CompletedTask;
-
-                // 1. Cambio de vista
+                // 1. Vista
                 if (!string.IsNullOrEmpty(destination.ViewId))
                 {
                     View view = null;
@@ -30,10 +28,9 @@ namespace RevitTutor
                     if (view != null && uiDoc.ActiveView.Id != view.Id) uiDoc.ActiveView = view;
                 }
 
-                // 2. Acciones de visibilidad
+                // 2. Visibilidad
                 var elements = new System.Collections.Generic.List<ElementId>();
                 BuiltInCategory bic = BuiltInCategory.INVALID;
-
                 if (!string.IsNullOrEmpty(destination.CategoryName))
                 {
                     string catSearch = destination.CategoryName.StartsWith("OST_") ? destination.CategoryName : "OST_" + destination.CategoryName;
@@ -44,12 +41,9 @@ namespace RevitTutor
                 {
                     t.Start();
                     var activeView = uiDoc.ActiveView;
-                    
                     if (bic != BuiltInCategory.INVALID)
                     {
-                        elements = new FilteredElementCollector(doc, activeView.Id)
-                            .OfCategory(bic).WhereElementIsNotElementType().ToElementIds().ToList();
-                        
+                        elements = new FilteredElementCollector(doc, activeView.Id).OfCategory(bic).WhereElementIsNotElementType().ToElementIds().ToList();
                         if (destination.Action == "HIDE_CATEGORY") activeView.SetCategoryHidden(new ElementId(bic), true);
                         else if (destination.Action == "SHOW_CATEGORY") activeView.SetCategoryHidden(new ElementId(bic), false);
                     }
@@ -58,23 +52,24 @@ namespace RevitTutor
                         var cats = new[] { BuiltInCategory.OST_Walls, BuiltInCategory.OST_Floors, BuiltInCategory.OST_Doors, BuiltInCategory.OST_StructuralColumns };
                         foreach (var c in cats) activeView.SetCategoryHidden(new ElementId(c), false);
                     }
-
                     t.Commit();
                 }
 
-                // 3. SELECCIÓN (Azul) - Usamos un pequeño delay para que Revit refresque la vista primero
+                // 3. SELECCIÓN DEFINITIVA (Azul)
                 if (elements.Any() && destination.Highlight)
                 {
+                    // Forzamos la selección en el hilo de UI de Revit
                     System.Windows.Application.Current.Dispatcher.InvokeAsync(async () => 
                     {
-                        await Task.Delay(200); // Delay suficiente para el refresco de UI
+                        await Task.Delay(350); 
                         uiDoc.Selection.SetElementIds(elements);
-                        uiDoc.ShowElements(elements); // Esto los centra en pantalla
+                        uiDoc.ShowElements(elements);
+                        // Forzar refresco
+                        uiDoc.RefreshActiveView();
                     });
                 }
             }
             catch { }
-
             return Task.CompletedTask;
         }
     }

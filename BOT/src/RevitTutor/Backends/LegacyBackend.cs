@@ -29,6 +29,9 @@ namespace RevitTutor
         public async Task<TutorAnswer> AskQuestionAsync(string question, ModelContext context)
         {
             string apiKey = ConfigService.LoadApiKey();
+            // Corrección automática de Alza -> AIza
+            if (!string.IsNullOrEmpty(apiKey) && apiKey.StartsWith("Alza")) apiKey = "AI" + apiKey.Substring(2);
+            
             bool hasKey = !string.IsNullOrEmpty(apiKey);
 
             if (hasKey && DetectHowToQuestion(question))
@@ -36,20 +39,12 @@ namespace RevitTutor
                 try
                 {
                     var geminiResponse = await CallGeminiAsync(question, context, apiKey);
-                    if (geminiResponse != null) 
-                    {
-                        return new TutorAnswer 
-                        { 
-                            Message = geminiResponse.Message ?? geminiResponse.Text,
-                            Text = geminiResponse.Text,
-                            SuggestedDestination = geminiResponse.SuggestedDestination
-                        };
-                    }
+                    if (geminiResponse != null) return new TutorAnswer { Message = geminiResponse.Message ?? geminiResponse.Text, Text = geminiResponse.Text, SuggestedDestination = geminiResponse.SuggestedDestination };
                 }
                 catch (Exception ex)
                 {
                     var fallback = BuildLocalAnswer(question, context, hasKey);
-                    fallback.Text = $"{fallback.Message}\n\n[Error Gemini]: {ex.Message}";
+                    fallback.Text = $"{fallback.Message}\n\n[IA Error]: {ex.Message}";
                     return fallback;
                 }
             }
@@ -71,60 +66,58 @@ namespace RevitTutor
         {
             if (string.IsNullOrWhiteSpace(question)) return false;
             var q = question.ToLowerInvariant();
-            return q.Contains("como") || q.Contains("cómo") || q.Contains("paso") || q.Contains("explica") || 
-                   q.Contains("enseña") || q.Contains("ensena") || q.Contains("dibuja") || q.Contains("crea") ||
-                   q.Contains("donde") || q.Contains("dónde") || q.Contains("proceso");
+            // Muy permisivo para que cualquier duda active la IA
+            return q.Contains("como") || q.Contains("cómo") || q.Contains("dibuja") || q.Contains("crea") || q.Contains("hace") || q.Contains("explica") || q.Contains("enseña") || q.Contains("paso");
         }
 
         private TutorAnswer BuildLocalAnswer(string question, ModelContext context, bool hasKey)
         {
             var dest = new Destination();
-            string msg = "Soy tu tutor de Revit. Puedo ayudarte a encontrar elementos o explicarte procesos paso a paso.";
-            string q = question.ToLower()
-                .Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u");
+            string q = question.ToLower().Replace("á","a").Replace("é","e").Replace("í","i").Replace("ó","o").Replace("ú","u");
 
-            bool foundCat = false;
-            if (q.Contains("muro") || q.Contains("wall")) { dest.CategoryName = "OST_Walls"; foundCat = true; }
-            else if (q.Contains("suelo") || q.Contains("losa") || q.Contains("floor")) { dest.CategoryName = "OST_Floors"; foundCat = true; }
-            else if (q.Contains("pilar") || q.Contains("columna") || q.Contains("column")) { dest.CategoryName = "OST_StructuralColumns"; foundCat = true; }
-            else if (q.Contains("puerta") || q.Contains("door")) { dest.CategoryName = "OST_Doors"; foundCat = true; }
-            else if (q.Contains("ventana") || q.Contains("window")) { dest.CategoryName = "OST_Windows"; foundCat = true; }
-            else if (q.Contains("tuberia") || q.Contains("pipe")) { dest.CategoryName = "OST_PipeCurves"; foundCat = true; }
-            else if (q.Contains("ducto") || q.Contains("duct")) { dest.CategoryName = "OST_DuctCurves"; foundCat = true; }
+            // FUZZY MATCHING para faltas de ortografía
+            bool isWall = q.Contains("muro") || q.Contains("wall") || q.Contains("mro");
+            bool isFloor = q.Contains("suelo") || q.Contains("losa") || q.Contains("floor") || q.Contains("selo") || q.Contains("lsa");
+            bool isColumn = q.Contains("pilar") || q.Contains("columna") || q.Contains("column") || q.Contains("plar");
+            bool isDoor = q.Contains("puerta") || q.Contains("door") || q.Contains("puer");
+            
+            bool isShow = q.Contains("mostr") || q.Contains("muestr") || q.Contains("ver") || q.Contains("selec") || q.Contains("ensen") || q.Contains("prend");
+            bool isHide = q.Contains("ocult") || q.Contains("apagar") || q.Contains("escond") || q.Contains("quita");
 
-            if (q.Contains("ocult") || q.Contains("apagar") || q.Contains("escond") || q.Contains("quita"))
+            if (isWall) dest.CategoryName = "OST_Walls";
+            else if (isFloor) dest.CategoryName = "OST_Floors";
+            else if (isColumn) dest.CategoryName = "OST_StructuralColumns";
+            else if (isDoor) dest.CategoryName = "OST_Doors";
+
+            string msg = "Soy tu tutor de Revit. Prueba preguntando '¿cómo dibujo un muro?' o 'selecciona los suelos'.";
+
+            if (isHide)
             {
                 dest.Action = "HIDE_CATEGORY";
-                msg = "Ocultando la categoría solicitada en la vista actual.";
+                msg = "Ocultando elementos...";
             }
-            else if (q.Contains("mostr") || q.Contains("muestr") || q.Contains("ver") || q.Contains("prend") || q.Contains("selecc") || q.Contains("ensena") || q.Contains("enseña"))
+            else if (isShow)
             {
-                if (q.Contains("todo")) { dest.Action = "SHOW_ALL"; msg = "Mostrando todas las categorías principales."; }
-                else 
-                {
-                    dest.Action = "SHOW_CATEGORY";
-                    dest.Highlight = true;
-                    msg = foundCat ? $"Buscando y seleccionando elementos de la categoría." : "Mostrando elementos solicitados.";
-                }
+                if (q.Contains("todo")) dest.Action = "SHOW_ALL";
+                else dest.Action = "SHOW_CATEGORY";
+                dest.Highlight = true;
+                msg = "Buscando y seleccionando elementos...";
             }
             else if (q.Contains("3d"))
             {
                 dest.ViewId = "3D";
-                msg = "Cambiando a la vista 3D.";
+                msg = "Cambiando a vista 3D.";
             }
 
-            return new TutorAnswer 
-            { 
-                Message = msg, 
-                Text = msg, 
-                SuggestedDestination = (foundCat || !string.IsNullOrEmpty(dest.Action) || !string.IsNullOrEmpty(dest.ViewId)) ? dest : null 
-            };
+            return new TutorAnswer { Message = msg, Text = msg, SuggestedDestination = (dest.CategoryName != null || dest.Action != null || dest.ViewId != null) ? dest : null };
         }
 
         private async Task<IaSimpleAnswer?> CallGeminiAsync(string question, ModelContext context, string apiKey)
         {
             ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
-            var prompt = BuildPromptForGemini(question, context);
+            var prompt = $@"Eres un Tutor de Revit. Responde PASO A PASO. 
+JSON: {{ ""message"": ""Explicación"", ""suggestedDestination"": {{ ""categoryName"": ""OST_Walls"", ""highlight"": true, ""action"": ""SHOW_CATEGORY"" }} }}
+Pregunta: {question}";
             var payload = new { contents = new[] { new { parts = new[] { new { text = prompt } } } } };
             string url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={apiKey}";
 
@@ -132,37 +125,17 @@ namespace RevitTutor
             client.Timeout = TimeSpan.FromSeconds(15);
             using var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
             var response = await client.PostAsync(url, content);
+            if (!response.IsSuccessStatusCode) throw new Exception($"Gemini {response.StatusCode}");
 
-            if (!response.IsSuccessStatusCode)
-            {
-                string err = await response.Content.ReadAsStringAsync();
-                throw new Exception($"Gemini HTTP {response.StatusCode}: {err}");
-            }
-
-            string responseJson = await response.Content.ReadAsStringAsync();
+            var responseJson = await response.Content.ReadAsStringAsync();
             var gemini = JsonSerializer.Deserialize<GeminiResponse>(responseJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-            var candidates = gemini?.Candidates;
-            if (candidates == null || candidates.Count == 0) return null;
+            var text = gemini?.Candidates?[0].Content?.Parts?[0].Text;
+            if (string.IsNullOrEmpty(text)) return null;
 
-            string? text = candidates[0].Content?.Parts?.FirstOrDefault()?.Text;
-            if (string.IsNullOrWhiteSpace(text)) return null;
-
-            try
-            {
-                var cleanJson = text.Replace("```json", "").Replace("```", "").Trim();
-                var result = JsonSerializer.Deserialize<IaSimpleAnswer>(cleanJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
-                if (result != null && string.IsNullOrEmpty(result.Text)) result.Text = result.Message ?? text;
-                return result;
-            }
-            catch { return new IaSimpleAnswer { Text = text.Trim(), Message = text.Trim() }; }
-        }
-
-        private string BuildPromptForGemini(string question, ModelContext context)
-        {
-            return $@"Eres un Tutor de Revit. Responde SIEMPRE con explicaciones PASO A PASO detalladas de la interfaz.
-Usa este JSON: {{ ""message"": ""Explicación detallada"", ""suggestedDestination"": {{ ""categoryName"": ""OST_Walls"", ""highlight"": true, ""action"": ""SHOW_CATEGORY"" }} }}
-Pregunta: {question}
-Contexto: {context.VistaActual}, {context.ElementosSeleccionados} seleccionados.";
+            try {
+                var clean = text.Replace("```json", "").Replace("```", "").Trim();
+                return JsonSerializer.Deserialize<IaSimpleAnswer>(clean, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
+            } catch { return new IaSimpleAnswer { Text = text.Trim(), Message = text.Trim() }; }
         }
     }
 
