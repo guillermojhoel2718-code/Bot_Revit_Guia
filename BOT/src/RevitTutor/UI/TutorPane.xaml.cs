@@ -97,12 +97,12 @@ namespace RevitTutor
                 }
 
                 // Mostrar respuesta en lenguaje natural
-                txtRespuesta.Text = answer.Message ?? "Te llevo al destino sugerido en el modelo.";
+                txtRespuesta.Text = answer.Message ?? "Listo, he procesado tu solicitud.";
                 
                 SetBotSpriteState("speaking");
                 
-                // Esperar un poco más para mostrar que está sentado al final
-                _ = System.Threading.Tasks.Task.Delay(2000).ContinueWith(_ =>
+                // Volver a sentado rápido y luego a idle
+                _ = System.Threading.Tasks.Task.Delay(1000).ContinueWith(_ =>
                 {
                     Dispatcher.Invoke(() => 
                     {
@@ -111,8 +111,7 @@ namespace RevitTutor
                     });
                 });
                 
-                // Volver a idle después de un rato sentado
-                _ = System.Threading.Tasks.Task.Delay(5000).ContinueWith(_ =>
+                _ = System.Threading.Tasks.Task.Delay(3000).ContinueWith(_ =>
                 {
                     Dispatcher.Invoke(() => SetBotSpriteState("idle"));
                 });
@@ -172,10 +171,10 @@ namespace RevitTutor
         {
             if (string.IsNullOrWhiteSpace(q)) return false;
             var low = q.ToLowerInvariant();
-            return low.Contains("muestr") || low.Contains("ensen") || low.Contains("enseñ") || 
+            return low.Contains("muestr") || low.Contains("mostr") || low.Contains("ensen") || low.Contains("enseñ") || 
                    low.Contains("selecc") || low.Contains("busc") || low.Contains("donde") || 
                    low.Contains("ubica") || low.Contains("pilar") || low.Contains("muro") || 
-                   low.Contains("suelo") || low.Contains("losa");
+                   low.Contains("suelo") || low.Contains("losa") || low.Contains("prend") || low.Contains("ocult");
         }
 
         private void SpawnFloatingBot()

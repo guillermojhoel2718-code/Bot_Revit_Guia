@@ -49,7 +49,7 @@ namespace RevitTutor
                 catch (Exception ex)
                 {
                     var fallback = BuildLocalAnswer(question, context, hasKey);
-                    fallback.Text = $"{fallback.Message}\n\nNota: No pude contactar a la IA: {ex.Message}.";
+                    fallback.Text = $"{fallback.Message}\n\nNota: Gemini offline: {ex.Message}";
                     return fallback;
                 }
             }
@@ -71,49 +71,53 @@ namespace RevitTutor
         {
             if (string.IsNullOrWhiteSpace(question)) return false;
             var q = question.ToLowerInvariant();
-            // Si es una pregunta de "Cómo", intentamos IA
-            return q.Contains("como") || q.Contains("cómo") || q.Contains("paso") || q.Contains("explica");
+            // Ampliamos para capturar más dudas
+            return q.Contains("como") || q.Contains("cómo") || q.Contains("paso") || q.Contains("explica") || 
+                   q.Contains("enseña") || q.Contains("ensena") || q.Contains("dibuja") || q.Contains("crea");
         }
 
         private TutorAnswer BuildLocalAnswer(string question, ModelContext context, bool hasKey)
         {
-            var suggestedDestination = new Destination();
-            string message = "Entendido. Procesando tu solicitud...";
+            var dest = new Destination();
+            string msg = "Soy tu tutor de Revit. Puedo ayudarte a encontrar elementos o explicarte procesos.";
             string q = question.ToLower()
                 .Replace("á", "a").Replace("é", "e").Replace("í", "i").Replace("ó", "o").Replace("ú", "u");
 
-            // 1. Detección de Categoría
-            if (q.Contains("muro")) suggestedDestination.CategoryName = "OST_Walls";
-            else if (q.Contains("suelo") || q.Contains("losa")) suggestedDestination.CategoryName = "OST_Floors";
-            else if (q.Contains("pilar") || q.Contains("columna")) suggestedDestination.CategoryName = "OST_StructuralColumns";
-            else if (q.Contains("puerta")) suggestedDestination.CategoryName = "OST_Doors";
+            // Categorías
+            bool foundCat = false;
+            if (q.Contains("muro") || q.Contains("wall")) { dest.CategoryName = "OST_Walls"; foundCat = true; }
+            else if (q.Contains("suelo") || q.Contains("losa") || q.Contains("floor")) { dest.CategoryName = "OST_Floors"; foundCat = true; }
+            else if (q.Contains("pilar") || q.Contains("columna") || q.Contains("column")) { dest.CategoryName = "OST_StructuralColumns"; foundCat = true; }
+            else if (q.Contains("puerta") || q.Contains("door")) { dest.CategoryName = "OST_Doors"; foundCat = true; }
+            else if (q.Contains("ventana") || q.Contains("window")) { dest.CategoryName = "OST_Windows"; foundCat = true; }
 
-            // 2. Detección de Acción
-            if (q.Contains("ocult") || q.Contains("apagar") || q.Contains("escond"))
+            // Acciones
+            if (q.Contains("ocult") || q.Contains("apagar") || q.Contains("escond") || q.Contains("quita"))
             {
-                suggestedDestination.Action = "HIDE_CATEGORY";
-                message = "Ocultando la categoría solicitada.";
+                dest.Action = "HIDE_CATEGORY";
+                msg = "Ocultando la categoría solicitada.";
             }
-            else if (q.Contains("mostr") || q.Contains("prend") || q.Contains("ver") || q.Contains("selecc"))
+            else if (q.Contains("mostr") || q.Contains("muestr") || q.Contains("ver") || q.Contains("prend") || q.Contains("selecc") || q.Contains("ensena") || q.Contains("enseña"))
             {
-                if (q.Contains("todo")) suggestedDestination.Action = "SHOW_ALL";
-                else suggestedDestination.Action = "SHOW_CATEGORY";
-                suggestedDestination.Highlight = true;
-                message = "Mostrando y resaltando elementos.";
+                if (q.Contains("todo")) { dest.Action = "SHOW_ALL"; msg = "Mostrando todas las categorías principales."; }
+                else 
+                {
+                    dest.Action = "SHOW_CATEGORY";
+                    dest.Highlight = true;
+                    msg = foundCat ? $"Mostrando y seleccionando elementos de la categoría." : "Mostrando elementos solicitados.";
+                }
             }
             else if (q.Contains("3d"))
             {
-                suggestedDestination.ViewId = "3D";
-                message = "Cambiando a vista 3D.";
+                dest.ViewId = "3D";
+                msg = "Cambiando a la vista 3D.";
             }
 
             return new TutorAnswer 
             { 
-                Message = message, 
-                Text = message, 
-                SuggestedDestination = string.IsNullOrEmpty(suggestedDestination.CategoryName) && 
-                                        string.IsNullOrEmpty(suggestedDestination.ViewId) && 
-                                        string.IsNullOrEmpty(suggestedDestination.Action) ? null : suggestedDestination 
+                Message = msg, 
+                Text = msg, 
+                SuggestedDestination = (foundCat || !string.IsNullOrEmpty(dest.Action) || !string.IsNullOrEmpty(dest.ViewId)) ? dest : null 
             };
         }
 
@@ -121,25 +125,15 @@ namespace RevitTutor
         {
             ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12;
             var prompt = BuildPromptForGemini(question, context);
-            
-            var payload = new
-            {
-                contents = new[] { new { parts = new[] { new { text = prompt } } } }
-            };
-
-            string json = JsonSerializer.Serialize(payload);
+            var payload = new { contents = new[] { new { parts = new[] { new { text = prompt } } } } };
             string url = $"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={apiKey}";
 
             using var client = new HttpClient();
-            client.Timeout = TimeSpan.FromSeconds(20);
-            using var content = new StringContent(json, Encoding.UTF8, "application/json");
+            client.Timeout = TimeSpan.FromSeconds(15);
+            using var content = new StringContent(JsonSerializer.Serialize(payload), Encoding.UTF8, "application/json");
             var response = await client.PostAsync(url, content);
 
-            if (!response.IsSuccessStatusCode)
-            {
-                string errorBody = await response.Content.ReadAsStringAsync();
-                throw new HttpRequestException($"Error Gemini: {response.StatusCode}");
-            }
+            if (!response.IsSuccessStatusCode) return null;
 
             string responseJson = await response.Content.ReadAsStringAsync();
             var gemini = JsonSerializer.Deserialize<GeminiResponse>(responseJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
@@ -152,27 +146,14 @@ namespace RevitTutor
                 var cleanJson = text.Replace("```json", "").Replace("```", "").Trim();
                 return JsonSerializer.Deserialize<IaSimpleAnswer>(cleanJson, new JsonSerializerOptions { PropertyNameCaseInsensitive = true });
             }
-            catch
-            {
-                return new IaSimpleAnswer { Text = text.Trim(), Message = text.Trim() };
-            }
+            catch { return new IaSimpleAnswer { Text = text.Trim(), Message = text.Trim() }; }
         }
 
         private string BuildPromptForGemini(string question, ModelContext context)
         {
-            return $@"Eres un Tutor de Revit. Responde con PASOS PASO A PASO.
-Usa este formato JSON:
-{{
-  ""message"": ""Explicación detallada de pasos (Menú > Herramienta)"",
-  ""suggestedDestination"": {{
-    ""categoryName"": ""OST_Walls (si aplica)"",
-    ""highlight"": true,
-    ""action"": ""SHOW_CATEGORY""
-  }}
-}}
-
-Pregunta: {question}
-Contexto: {context.VistaActual}";
+            return $@"Eres un Tutor de Revit. Responde con PASOS PASO A PASO procedimentales.
+Usa JSON: {{ ""message"": ""Pasos detallados"", ""suggestedDestination"": {{ ""categoryName"": ""OST_Walls"", ""highlight"": true, ""action"": ""SHOW_CATEGORY"" }} }}
+Pregunta: {question}";
         }
     }
 
